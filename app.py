@@ -163,27 +163,27 @@ def obtener_datos_financieros(tk, Tc_def):
         roa = info.get("returnOnAssets")
         roe = info.get("returnOnEquity")
         
-        # Dividendos - cálculo mejorado
-        div_yield = info.get("dividendYield")
-        payout = info.get("payoutRatio")
-        
-        # Calcular el dividendo anual por acción
-        dividend_rate = info.get("dividendRate")  # Dividendo anual por acción
+        # Dividendos - cálculo CORREGIDO
+        div_yield = info.get("dividendYield")  # ← ESTE ES EL CORRECTO (no payoutRatio)
+        payout = info.get("payoutRatio")  # ← Este está BIEN, no tocar
+
+        # Calcular el dividendo anual por acción CORREGIDO
+        dividend_rate = info.get("dividendRate")
         if dividend_rate is None:
-            # Si no está disponible, calcularlo manualmente
-            last_dividend = info.get("lastDividendValue")
-            if last_dividend and price:
-                # Asumir que es trimestral (común en EE.UU.)
-                dividend_rate = last_dividend * 4
-            else:
-                dividend_rate = None
-        
-        # Calcular significado: $ por cada $100 invertidos
-        div_significado = None
+            # Si no está disponible, usar trailingAnnualDividendRate
+            dividend_rate = info.get("trailingAnnualDividendRate")
+        if dividend_rate is None and div_yield and price:
+            # Calcular desde el yield si es necesario
+            dividend_rate = div_yield * price
+
+        # Calcular R.A. Dividendo (Rentabilidad de dividendo anual)
+        ra_dividendo = None
         if dividend_rate and price:
-            div_significado = f"${dividend_rate / price * 100:.2f} anual por cada $100 invertidos"
+            amount_per_100 = dividend_rate / price * 100
+            ra_dividendo = f"${amount_per_100:.2f} anual por cada $100 invertidos"
         elif div_yield and price:
-            div_significado = f"${div_yield * 100:.2f} anual por cada $100 invertidos"
+            amount_per_100 = div_yield * 100
+            ra_dividendo = f"${amount_per_100:.2f} anual por cada $100 invertidos"
         
         # Crecimiento
         revenue_growth = cagr4(fin, "Total Revenue")
@@ -201,7 +201,7 @@ def obtener_datos_financieros(tk, Tc_def):
             "P/B": info.get("priceToBook"),
             "P/FCF": pfcf,
             "Dividend Yield %": div_yield,
-            "Dividend Significado": div_significado,  # Nueva columna
+            "R.A. Dividendo": ra_dividendo,  # ← Nombre cambiado
             "Payout Ratio": payout,
             "ROA": roa,
             "ROE": roe,
@@ -213,7 +213,7 @@ def obtener_datos_financieros(tk, Tc_def):
             "Profit Margin": profit_margin,
             "WACC": wacc,
             "ROIC": roic,
-            "Creacion Valor (Wacc vs Roic)": creacion_valor,  # Cambiado de EVA
+            "Creacion Valor (Wacc vs Roic)": creacion_valor,
             "Revenue Growth": revenue_growth,
             "EPS Growth": eps_growth,
             "FCF Growth": fcf_growth,
@@ -282,8 +282,8 @@ def main():
         # Formatear valores para visualización
         df_disp = df.copy()
         
-        # Nueva columna para el significado del dividendo (no necesita formateo adicional)
-        df_disp["Dividend Significado"] = df["Dividend Significado"].fillna("N/D")
+        # Nueva columna para R.A. Dividendo (no necesita formateo adicional)
+        df_disp["R.A. Dividendo"] = df["R.A. Dividendo"].fillna("N/D")
         
         # Columnas con 2 decimales
         for col in ["P/E", "P/B", "P/FCF", "Current Ratio", "Quick Ratio", "Debt/Eq", "LtDebt/Eq"]:
@@ -317,7 +317,7 @@ def main():
             df_disp[[
                 "Ticker", "Nombre", "País", "Industria", "Sector",
                 "Precio", "P/E", "P/B", "P/FCF",
-                "Dividend Yield %", "Dividend Significado", "Payout Ratio", "ROA", "ROE",  # Agregada nueva columna
+                "Dividend Yield %", "R.A. Dividendo", "Payout Ratio", "ROA", "ROE",
                 "Current Ratio", "Debt/Eq", "Oper Margin", "Profit Margin",
                 "WACC", "ROIC", "Creacion Valor (Wacc vs Roic)", "MarketCap"
             ]],
@@ -495,14 +495,14 @@ def main():
             st.metric("Market Cap", det_disp["MarketCap"])
             st.metric("ROIC", det_disp["ROIC"])
             st.metric("WACC", det_disp["WACC"])
-            st.metric("Creación Valor", det_disp["Creacion Valor (Wacc vs Roic)"])  # Cambiado
+            st.metric("Creación Valor", det_disp["Creacion Valor (Wacc vs Roic)"])
             
         with cC:
             st.metric("ROE", det_disp["ROE"])
             st.metric("Dividend Yield", det_disp["Dividend Yield %"])
-            # Mostrar solo el valor numérico del dividendo por $100
-            div_value = det_disp["Dividend Significado"].split(" ")[0] if det_disp["Dividend Significado"] != "N/D" else "N/D"
-            st.metric("Dividend por $100", div_value)
+            # Mostrar solo el valor numérico del R.A. Dividendo
+            ra_dividendo_value = det_disp["R.A. Dividendo"].split(" ")[0] if det_disp["R.A. Dividendo"] != "N/D" else "N/D"
+            st.metric("R.A. Dividendo", ra_dividendo_value)  # ← Nombre cambiado
             st.metric("Current Ratio", det_disp["Current Ratio"])
             st.metric("Debt/Eq", det_disp["Debt/Eq"])
 
