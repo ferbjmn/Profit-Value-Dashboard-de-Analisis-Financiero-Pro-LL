@@ -110,6 +110,43 @@ def auto_ylim(ax, values, pad=0.10):
         ymin, ymax = -m, m
     ax.set_ylim(ymin, ymax)
 
+def obtener_datos_dividendos(ticker_symbol):
+    """Función específica para obtener datos de dividendos"""
+    try:
+        ticker = yf.Ticker(ticker_symbol)
+        info = ticker.info
+        
+        # Dividend Yield
+        dividend_yield = info.get('dividendYield')
+        
+        # Último dividendo pagado
+        if not ticker.dividends.empty:
+            ultimo_dividendo = ticker.dividends.tail(1).values[0]
+            fecha_ultimo_dividendo = ticker.dividends.tail(1).index[0].strftime('%Y-%m-%d')
+            # Calcular dividendo anual (asumiendo pago trimestral)
+            dividendo_anual = ultimo_dividendo * 4
+        else:
+            ultimo_dividendo = None
+            fecha_ultimo_dividendo = "No disponible"
+            dividendo_anual = None
+        
+        # Significado del dividend yield
+        significado_dy = f"${dividendo_anual:.2f} anual por cada $100 invertidos" if dividend_yield and dividendo_anual else "N/D"
+        
+        return {
+            "Ultimo Dividendo": ultimo_dividendo,
+            "Fecha Ultimo Dividendo": fecha_ultimo_dividendo,
+            "Dividendo Anual": dividendo_anual,
+            "Significado DY": significado_dy
+        }
+    except Exception as e:
+        return {
+            "Ultimo Dividendo": None,
+            "Fecha Ultimo Dividendo": "Error",
+            "Dividendo Anual": None,
+            "Significado DY": f"Error: {str(e)}"
+        }
+
 def obtener_datos_financieros(tk, Tc_def):
     try:
         tkr = yf.Ticker(tk)
@@ -117,6 +154,9 @@ def obtener_datos_financieros(tk, Tc_def):
         bs = tkr.balance_sheet
         fin = tkr.financials
         cf = tkr.cashflow
+        
+        # Obtener datos de dividendos
+        datos_dividendos = obtener_datos_dividendos(tk)
         
         # Datos básicos
         beta = info.get("beta", 1)
@@ -163,7 +203,7 @@ def obtener_datos_financieros(tk, Tc_def):
         roa = info.get("returnOnAssets")
         roe = info.get("returnOnEquity")
         
-        # Dividendos
+        # Dividendos (usando datos de la nueva función)
         div_yield = info.get("dividendYield")
         payout = info.get("payoutRatio")
         
@@ -183,6 +223,10 @@ def obtener_datos_financieros(tk, Tc_def):
             "P/B": info.get("priceToBook"),
             "P/FCF": pfcf,
             "Dividend Yield %": div_yield,
+            "Ultimo Dividendo": datos_dividendos["Ultimo Dividendo"],
+            "Dividendo Anual": datos_dividendos["Dividendo Anual"],
+            "Significado DY": datos_dividendos["Significado DY"],
+            "Fecha Ultimo Dividendo": datos_dividendos["Fecha Ultimo Dividendo"],
             "Payout Ratio": payout,
             "ROA": roa,
             "ROE": roe,
@@ -194,7 +238,7 @@ def obtener_datos_financieros(tk, Tc_def):
             "Profit Margin": profit_margin,
             "WACC": wacc,
             "ROIC": roic,
-            "Creacion Valor (Wacc vs Roic)": creacion_valor,  # Cambiado de EVA
+            "Creacion Valor (Wacc vs Roic)": creacion_valor,
             "Revenue Growth": revenue_growth,
             "EPS Growth": eps_growth,
             "FCF Growth": fcf_growth,
@@ -281,8 +325,16 @@ def main():
         df_disp["Precio"] = df_disp["Precio"].apply(lambda x: f"${float(x):,.2f}" if pd.notnull(x) else "N/D")
         df_disp["MarketCap"] = df_disp["MarketCap"].apply(lambda x: f"${float(x)/1e9:,.2f}B" if pd.notnull(x) else "N/D")
         
+        # Formatear dividendos
+        df_disp["Ultimo Dividendo"] = df_disp["Ultimo Dividendo"].apply(
+            lambda x: f"${x:.2f}" if pd.notnull(x) else "N/D"
+        )
+        df_disp["Dividendo Anual"] = df_disp["Dividendo Anual"].apply(
+            lambda x: f"${x:.2f}" if pd.notnull(x) else "N/D"
+        )
+        
         # Asegurar que las columnas de texto no sean None
-        for c in ["Nombre", "País", "Industria"]:
+        for c in ["Nombre", "País", "Industria", "Significado DY", "Fecha Ultimo Dividendo"]:
             df_disp[c] = df_disp[c].fillna("N/D").replace({None: "N/D", "": "N/D"})
 
         # =====================================================
@@ -295,9 +347,10 @@ def main():
             df_disp[[
                 "Ticker", "Nombre", "País", "Industria", "Sector",
                 "Precio", "P/E", "P/B", "P/FCF",
-                "Dividend Yield %", "Payout Ratio", "ROA", "ROE",
-                "Current Ratio", "Debt/Eq", "Oper Margin", "Profit Margin",
-                "WACC", "ROIC", "Creacion Valor (Wacc vs Roic)", "MarketCap"  # Cambiado
+                "Dividend Yield %", "Significado DY", "Ultimo Dividendo", "Fecha Ultimo Dividendo",
+                "Payout Ratio", "ROA", "ROE", "Current Ratio", "Debt/Eq", 
+                "Oper Margin", "Profit Margin", "WACC", "ROIC", 
+                "Creacion Valor (Wacc vs Roic)", "MarketCap"
             ]],
             use_container_width=True,
             height=500
@@ -310,7 +363,51 @@ def main():
         sectors_ordered = df["Sector"].unique()
 
         # =====================================================
-        # SECCIÓN 2: ANÁLISIS DE VALORACIÓN
+        # SECCIÓN 2: ANÁLISIS DE DIVIDENDOS
+        # =====================================================
+        st.header("💰 Análisis de Dividendos")
+        
+        # Filtrar empresas que pagan dividendos
+        empresas_con_dividendos = df[df["Dividend Yield %"].notna() & (df["Dividend Yield %"] > 0)]
+        
+        if not empresas_con_dividendos.empty:
+            # Gráfico de Dividend Yield
+            fig, ax = plt.subplots(figsize=(12, 6))
+            div_data = empresas_con_dividendos.sort_values("Dividend Yield %", ascending=False)
+            bars = ax.bar(div_data["Ticker"], div_data["Dividend Yield %"] * 100)
+            ax.set_ylabel("Dividend Yield (%)")
+            ax.set_title("Comparación de Dividend Yield")
+            plt.xticks(rotation=45)
+            
+            # Añadir etiquetas con los valores
+            for bar in bars:
+                height = bar.get_height()
+                ax.text(bar.get_x() + bar.get_width()/2., height + 0.1,
+                        f'{height:.1f}%', ha='center', va='bottom', fontsize=8)
+            
+            st.pyplot(fig)
+            plt.close()
+            
+            # Tabla detallada de dividendos
+            st.subheader("📊 Detalle de Dividendos")
+            div_table = empresas_con_dividendos[[
+                "Ticker", "Nombre", "Dividend Yield %", "Ultimo Dividendo", 
+                "Dividendo Anual", "Fecha Ultimo Dividendo", "Payout Ratio"
+            ]].copy()
+            
+            div_table["Dividend Yield %"] = div_table["Dividend Yield %"].apply(
+                lambda x: f"{x*100:.2f}%" if pd.notnull(x) else "N/D"
+            )
+            div_table["Payout Ratio"] = div_table["Payout Ratio"].apply(
+                lambda x: f"{x*100:.1f}%" if pd.notnull(x) else "N/D"
+            )
+            
+            st.dataframe(div_table.sort_values("Dividend Yield %", ascending=False), use_container_width=True)
+        else:
+            st.info("ℹ️ No se encontraron empresas que paguen dividendos en la lista")
+
+        # =====================================================
+        # SECCIÓN 3: ANÁLISIS DE VALORACIÓN
         # =====================================================
         st.header("💰 Análisis de Valoración (por Sector)")
         
@@ -329,7 +426,7 @@ def main():
                 plt.close()
 
         # =====================================================
-        # SECCIÓN 3: RENTABILIDAD Y EFICIENCIA
+        # SECCIÓN 4: RENTABILIDAD Y EFICIENCIA
         # =====================================================
         st.header("📈 Rentabilidad y Eficiencia")
         
@@ -385,7 +482,7 @@ def main():
             plt.close()
 
         # =====================================================
-        # SECCIÓN 4: ESTRUCTURA DE CAPITAL Y LIQUIDEZ
+        # SECCIÓN 5: ESTRUCTURA DE CAPITAL Y LIQUIDEZ
         # =====================================================
         st.header("🏦 Estructura de Capital y Liquidez (por sector)")
         
@@ -422,7 +519,7 @@ def main():
                         plt.close()
 
         # =====================================================
-        # SECCIÓN 5: CRECIMIENTO
+        # SECCIÓN 6: CRECIMIENTO
         # =====================================================
         st.header("🚀 Crecimiento (CAGR 3-4 años, por sector)")
         
@@ -448,7 +545,7 @@ def main():
                     plt.close()
 
         # =====================================================
-        # SECCIÓN 6: ANÁLISIS INDIVIDUAL
+        # SECCIÓN 7: ANÁLISIS INDIVIDUAL
         # =====================================================
         st.header("🔍 Análisis por Empresa")
         pick = st.selectbox("Selecciona empresa", df_disp["Ticker"].unique())
@@ -462,7 +559,7 @@ def main():
         **Industria:** {det_raw['Industria']}
         """)
 
-        cA, cB, cC = st.columns(3)
+        cA, cB, cC, cD = st.columns(4)
         with cA:
             st.metric("Precio", det_disp["Precio"])
             st.metric("P/E", det_disp["P/E"])
@@ -473,13 +570,23 @@ def main():
             st.metric("Market Cap", det_disp["MarketCap"])
             st.metric("ROIC", det_disp["ROIC"])
             st.metric("WACC", det_disp["WACC"])
-            st.metric("Creación Valor", det_disp["Creacion Valor (Wacc vs Roic)"])  # Cambiado
+            st.metric("Creación Valor", det_disp["Creacion Valor (Wacc vs Roic)"])
             
         with cC:
             st.metric("ROE", det_disp["ROE"])
             st.metric("Dividend Yield", det_disp["Dividend Yield %"])
             st.metric("Current Ratio", det_disp["Current Ratio"])
             st.metric("Debt/Eq", det_disp["Debt/Eq"])
+            
+        with cD:
+            st.metric("Último Dividendo", det_disp["Ultimo Dividendo"])
+            st.metric("Dividendo Anual", det_disp["Dividendo Anual"])
+            st.metric("Payout Ratio", det_disp["Payout Ratio"])
+            st.metric("Fecha Último Div", det_disp["Fecha Ultimo Dividendo"])
+
+        # Información adicional sobre dividendos
+        if pd.notnull(det_raw["Dividend Yield %"]) and det_raw["Dividend Yield %"] > 0:
+            st.info(f"**Significado del Dividend Yield:** {det_disp['Significado DY']}")
 
         st.subheader("ROIC vs WACC")
         if pd.notnull(det_raw["ROIC"]) and pd.notnull(det_raw["WACC"]):
