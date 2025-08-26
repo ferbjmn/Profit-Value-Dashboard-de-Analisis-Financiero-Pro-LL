@@ -7,7 +7,6 @@ import yfinance as yf
 import matplotlib.pyplot as plt
 import numpy as np
 import time
-import requests
 
 # Configuración global
 st.set_page_config(
@@ -195,27 +194,15 @@ def obtener_datos_financieros(tk, Tc_def):
             "Profit Margin": profit_margin,
             "WACC": wacc,
             "ROIC": roic,
-            "Creacion Valor (Wacc vs Roic)": creacion_valor,
+            "Creacion Valor (Wacc vs Roic)": creacion_valor,  # Cambiado de EVA
             "Revenue Growth": revenue_growth,
             "EPS Growth": eps_growth,
             "FCF Growth": fcf_growth,
             "MarketCap": mcap
         }
     except Exception as e:
-        # Manejar específicamente el error de rate limiting
-        if "Too Many Requests" in str(e) or "rate" in str(e).lower():
-            st.warning(f"Rate limit alcanzado para {tk}. Reintentando después de pausa...")
-            time.sleep(2)  # Pausa más larga para rate limiting
-            # Reintentar una vez más después de la pausa
-            try:
-                time.sleep(2)
-                return obtener_datos_financieros(tk, Tc_def)
-            except:
-                st.error(f"Error persistente obteniendo datos para {tk}: {str(e)}")
-                return None
-        else:
-            st.error(f"Error obteniendo datos para {tk}: {str(e)}")
-            return None
+        st.error(f"Error obteniendo datos para {tk}: {str(e)}")
+        return None
 
 # =============================================================
 # INTERFAZ PRINCIPAL
@@ -253,11 +240,10 @@ def main():
                     data = obtener_datos_financieros(tk, Tc0)
                     if data:
                         datos.append(data)
-                    # Aumentar el tiempo de espera a 1 segundo entre solicitudes
-                    time.sleep(1)
                 except Exception as e:
                     errs.append({"Ticker": tk, "Error": str(e)})
                 progress_bar.progress((i + 1) / len(tickers))
+                time.sleep(1)  # Evitar rate limiting
 
         status_text.text("✅ Análisis completado!")
         time.sleep(0.5)
@@ -311,7 +297,7 @@ def main():
                 "Precio", "P/E", "P/B", "P/FCF",
                 "Dividend Yield %", "Payout Ratio", "ROA", "ROE",
                 "Current Ratio", "Debt/Eq", "Oper Margin", "Profit Margin",
-                "WACC", "ROIC", "Creacion Valor (Wacc vs Roic)", "MarketCap"
+                "WACC", "ROIC", "Creacion Valor (Wacc vs Roic)", "MarketCap"  # Cambiado
             ]],
             use_container_width=True,
             height=500
@@ -487,7 +473,7 @@ def main():
             st.metric("Market Cap", det_disp["MarketCap"])
             st.metric("ROIC", det_disp["ROIC"])
             st.metric("WACC", det_disp["WACC"])
-            st.metric("Creación Valor", det_disp["Creacion Valor (Wacc vs Roic)"])
+            st.metric("Creación Valor", det_disp["Creacion Valor (Wacc vs Roic)"])  # Cambiado
             
         with cC:
             st.metric("ROE", det_disp["ROE"])
