@@ -163,8 +163,20 @@ def obtener_datos_financieros(tk, Tc_def):
         roa = info.get("returnOnAssets")
         roe = info.get("returnOnEquity")
         
-        # Dividendos - datos directos de yfinance
+        # MEJORA: Cálculo robusto del Dividend Yield
         div_yield = info.get("dividendYield")
+        # Si no está disponible, calcularlo manualmente
+        if div_yield is None:
+            try:
+                # Obtener dividendos de los últimos 12 meses
+                dividend_history = tkr.dividends
+                if not dividend_history.empty:
+                    last_year_dividends = dividend_history.last('365D').sum()
+                    if price and price > 0:
+                        div_yield = last_year_dividends / price
+            except:
+                div_yield = None
+        
         payout = info.get("payoutRatio")
         
         # Calcular R.A. Dividendo (Rentabilidad de dividendo anual)
