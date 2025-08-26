@@ -163,25 +163,13 @@ def obtener_datos_financieros(tk, Tc_def):
         roa = info.get("returnOnAssets")
         roe = info.get("returnOnEquity")
         
-        # Dividendos - cálculo CORREGIDO
-        div_yield = info.get("dividendYield")  # ← ESTE ES EL CORRECTO (no payoutRatio)
-        payout = info.get("payoutRatio")  # ← Este está BIEN, no tocar
-
-        # Calcular el dividendo anual por acción CORREGIDO
-        dividend_rate = info.get("dividendRate")
-        if dividend_rate is None:
-            # Si no está disponible, usar trailingAnnualDividendRate
-            dividend_rate = info.get("trailingAnnualDividendRate")
-        if dividend_rate is None and div_yield and price:
-            # Calcular desde el yield si es necesario
-            dividend_rate = div_yield * price
-
+        # Dividendos - datos directos de yfinance
+        div_yield = info.get("dividendYield")
+        payout = info.get("payoutRatio")
+        
         # Calcular R.A. Dividendo (Rentabilidad de dividendo anual)
         ra_dividendo = None
-        if dividend_rate and price:
-            amount_per_100 = dividend_rate / price * 100
-            ra_dividendo = f"${amount_per_100:.2f} anual por cada $100 invertidos"
-        elif div_yield and price:
+        if div_yield is not None:
             amount_per_100 = div_yield * 100
             ra_dividendo = f"${amount_per_100:.2f} anual por cada $100 invertidos"
         
@@ -201,7 +189,7 @@ def obtener_datos_financieros(tk, Tc_def):
             "P/B": info.get("priceToBook"),
             "P/FCF": pfcf,
             "Dividend Yield %": div_yield,
-            "R.A. Dividendo": ra_dividendo,  # ← Nombre cambiado
+            "R.A. Dividendo": ra_dividendo,
             "Payout Ratio": payout,
             "ROA": roa,
             "ROE": roe,
@@ -407,7 +395,7 @@ def main():
             plt.close()
 
         # =====================================================
-        # SECCIÓN 4: ESTRUCTURA DE CAPITAL Y LIQUIDEZ
+        # SECCIÓN 4: ESTRUCTURA DE CAPITAL AND LIQUIDEZ
         # =====================================================
         st.header("🏦 Estructura de Capital y Liquidez (por sector)")
         
@@ -434,7 +422,7 @@ def main():
                         
                     with c2:
                         st.caption("Liquidez")
-                        fig, ax = plt.subplots(figsize=(10, 5))
+                        fig, ax = plt.subplots(figsize(10, 5))
                         liq = chunk[["Ticker", "Current Ratio", "Quick Ratio"]].set_index("Ticker").apply(pd.to_numeric, errors="coerce")
                         liq.plot(kind="bar", ax=ax, rot=45)
                         ax.axhline(1, color="green", linestyle="--")
@@ -502,7 +490,7 @@ def main():
             st.metric("Dividend Yield", det_disp["Dividend Yield %"])
             # Mostrar solo el valor numérico del R.A. Dividendo
             ra_dividendo_value = det_disp["R.A. Dividendo"].split(" ")[0] if det_disp["R.A. Dividendo"] != "N/D" else "N/D"
-            st.metric("R.A. Dividendo", ra_dividendo_value)  # ← Nombre cambiado
+            st.metric("R.A. Dividendo", ra_dividendo_value)
             st.metric("Current Ratio", det_disp["Current Ratio"])
             st.metric("Debt/Eq", det_disp["Debt/Eq"])
 
